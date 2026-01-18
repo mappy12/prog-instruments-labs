@@ -1,9 +1,20 @@
 import math
+import logging
 
 from scipy.special import gammainc
 
 from consts import *
 
+logging.basicConfig(
+    level=logging.DEBUG,
+    format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
+    handlers=[
+        logging.FileHandler("tests.log", encoding="utf-8"),
+        logging.StreamHandler()
+    ]
+)
+
+logger = logging.getLogger(__name__)
 
 def read_file(filename: str) -> str:
     """
@@ -13,15 +24,19 @@ def read_file(filename: str) -> str:
     :return: The sequence
     """
 
+    logger.info(f"Reading file: {filename}")
+
     try:
 
         with open(filename, 'r', encoding='utf-8') as file:
-            return file.read()
+            data = file.read()
+            logger.debug(
+                f"File {filename} read successfully, length={len(data)}")
+            return data
 
     except Exception as e:
-
-        print(f"Error reading file: {e}")
-
+        logger.error(f"Error reading file {filename}: {e}", exc_info=True)
+        raise
 
 def write_file(filename: str, text: str) -> None:
     """
@@ -32,13 +47,15 @@ def write_file(filename: str, text: str) -> None:
     :return: None
     """
 
-    try:
+    logger.info(f"Writing results to file: {filename}")
 
+    try:
         with open(filename, 'w', encoding='utf-8') as file:
             file.write(text)
+            logger.debug(f"Successfully wrote {len(text)} characters")
 
     except Exception as e:
-
+        logger.error(f"Error writing file {filename}: {e}", exc_info=True)
         print(f"Error writing file: {e}")
 
 
@@ -50,14 +67,19 @@ def frequency_bit_test(sequence: str) -> float:
     :return: P-value
     """
 
+    logger.debug("Starting frequency bit test")
+
     n = len(sequence)
 
     if n == 0:
+        logger.warning("Frequency bit test failed: empty sequence")
         raise ValueError("Sequence is empty")
 
     s = sum([1 if bit == "1" else -1 for bit in sequence])
 
     p_value = math.erfc((abs(s) / math.sqrt(n)) / math.sqrt(2))
+
+    logger.debug(f"Frequency bit test completed: p-value={p_value}")
 
     return p_value
 
@@ -70,14 +92,14 @@ def runs_test(sequence: str) -> float:
     :return: P-value
     """
 
-    p_value = 0
+    logger.debug("Starting runs test")
 
     n = len(sequence)
-
     p = sequence.count('1') / n
 
     if abs(p - 0.5) >= 2 / math.sqrt(n):
-        return p_value
+        logger.warning("Runs test condition failed, returning p-value=0")
+        return 0.0
 
     v_n = 0
 
@@ -89,7 +111,10 @@ def runs_test(sequence: str) -> float:
     numerator = abs(v_n - 2 * n * p * (1 - p))
     denominator = 2 * math.sqrt(2 * n) * p * (1 - p)
 
-    return math.erfc(numerator / denominator)
+    p_value = math.erfc(numerator / denominator)
+    logger.debug(f"Runs test completed: p-value={p_value}")
+
+    return p_value
 
 
 def block_run_test(sequence: str) -> float:
@@ -100,10 +125,13 @@ def block_run_test(sequence: str) -> float:
     :return: P-value
     """
 
+    logger.debug("Starting block run test")
+
     n = len(sequence)
 
     if n < 128:
-        raise ValueError("Minimum 128 bits")
+        logger.error("Block run test failed: sequence length < 128")
+        raise ValueError("Minimum 128 bits required")
 
     N = n // 8
 
@@ -148,13 +176,18 @@ def block_run_test(sequence: str) -> float:
 
     p_value = gammainc(3 / 2, x_2 / 2)
 
+    logger.debug(f"Block run test completed: p-value={p_value}")
+
     return p_value
 
 
 def main():
+    logger.info("Application started")
 
     cpp_sequence = read_file(cpp_sequence_txt)
     java_sequence = read_file(java_sequence_txt)
+
+    logger.info("Running tests for CPP sequence")
 
     p_val_freq_bits_cpp = frequency_bit_test(cpp_sequence)
     p_val_ident_bits_cpp = runs_test(cpp_sequence)
@@ -168,6 +201,8 @@ def main():
 
     write_file(test_results_cpp, result_cpp_test)
 
+    logger.info("Running tests for Java sequence")
+
     p_val_freq_bits_java = frequency_bit_test(java_sequence)
     p_val_ident_bits_java = runs_test(java_sequence)
     p_val_longest_bits_block_java = block_run_test(java_sequence)
@@ -179,6 +214,8 @@ def main():
                       f"{p_val_longest_bits_block_java}")
 
     write_file(test_results_java, result_java_test)
+
+    logger.info("Application finished successfully")
 
 
 if __name__ == "__main__":
